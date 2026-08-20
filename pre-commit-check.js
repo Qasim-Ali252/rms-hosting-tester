@@ -1,143 +1,136 @@
+/**
+ * pre-commit-check.js
+ *
+ * Security audit before committing to Git.
+ * Run: npm run security-check
+ */
+
 const fs = require('fs');
-const path = require('path');
 
-console.log('🔍 Pre-commit Security Check\n');
+console.log('\n🔍 Pre-commit Security Check\n');
 
-// Files that should NOT be committed
-const sensitiveFiles = [
+// Files that must never be committed
+const SENSITIVE_FILES = [
   '.env',
-  '.env.local', 
+  '.env.local',
   '.env.development',
   '.env.test',
-  'config/database.json',
-  'secrets.json'
+  'secrets.json',
+  'config.json',
 ];
 
-// Patterns that should NOT be in committed files
-const sensitivePatterns = [
-  /password\s*=\s*['"][^'"]+['"]/i,
-  /secret\s*=\s*['"][^'"]+['"]/i,
-  /api_key\s*=\s*['"][^'"]+['"]/i,
-  /DB_PASSWORD\s*=\s*[^#\n\r]+/,
-  /mysql:\/\/.*:.*@/i
+// Patterns that indicate hardcoded credentials in source files
+const SENSITIVE_PATTERNS = [
+  /password\s*=\s*['"][^'"]{3,}['"]/i,
+  /secret\s*=\s*['"][^'"]{3,}['"]/i,
+  /api_key\s*=\s*['"][^'"]{3,}['"]/i,
+  /DB_PASSWORD\s*=\s*[^#\n\r'"\s]+/,
+  /mysql:\/\/.+:.+@/i,
 ];
 
 let issues = 0;
 
-// Check for sensitive files
+// ---------------------------------------------------------------
+// 1. Sensitive files
+// ---------------------------------------------------------------
 console.log('🔐 Checking for sensitive files...');
-sensitiveFiles.forEach(file => {
+SENSITIVE_FILES.forEach((file) => {
   if (fs.existsSync(file)) {
-    console.log(`❌ FOUND: ${file} - This file contains secrets and should not be committed!`);
+    console.log(`   ❌ FOUND: ${file}  — contains secrets and must not be committed`);
     issues++;
   }
 });
+if (issues === 0) console.log('   ✅ No sensitive files found\n');
+else console.log('');
 
-if (issues === 0) {
-  console.log('✅ No sensitive files found');
-}
+// ---------------------------------------------------------------
+// 2. Hardcoded secrets in source files
+// ---------------------------------------------------------------
+console.log('📄 Checking source files for hardcoded credentials...');
 
-console.log('\n📄 Checking code files for hardcoded secrets...');
+const SOURCE_FILES = [
+  'app.js',
+  'seed.js',
+  'load-test.js',
+  'checkout-stress-test.js',
+  'socket-test.js',
+  'dashboard.js',
+];
 
-// Check JavaScript files for hardcoded secrets
-const checkFile = (filePath) => {
-  if (!fs.existsSync(filePath)) return;
-  
-  const content = fs.readFileSync(filePath, 'utf8');
-  
-  sensitivePatterns.forEach((pattern, index) => {
-    const matches = content.match(pattern);
-    if (matches) {
-      console.log(`❌ FOUND in ${filePath}: Potential hardcoded secret - ${matches[0]}`);
+let secretIssues = 0;
+SOURCE_FILES.forEach((file) => {
+  if (!fs.existsSync(file)) return;
+  const content = fs.readFileSync(file, 'utf8');
+  SENSITIVE_PATTERNS.forEach((pattern) => {
+    const match = content.match(pattern);
+    if (match) {
+      console.log(`   ❌ ${file}: potential hardcoded secret — ${match[0].substring(0, 60)}`);
+      secretIssues++;
       issues++;
     }
   });
-};
-
-// Files to check
-const filesToCheck = [
-  'app.js',
-  'dashboard.js',
-  'seed-db.js',
-  'load-test.js',
-  'socket-test.js'
-];
-
-filesToCheck.forEach(file => {
-  if (fs.existsSync(file)) {
-    checkFile(file);
-  }
 });
+if (secretIssues === 0) console.log('   ✅ No hardcoded secrets found\n');
+else console.log('');
 
-if (issues === 0) {
-  console.log('✅ No hardcoded secrets found in code files');
-}
-
-console.log('\n🛡️ Checking .gitignore coverage...');
-
-// Check if .gitignore exists and covers sensitive files
+// ---------------------------------------------------------------
+// 3. .gitignore coverage
+// ---------------------------------------------------------------
+console.log('🛡️  Checking .gitignore...');
+const REQUIRED_IGNORES = ['.env', 'node_modules/', '*.log', 'passenger.log'];
 if (fs.existsSync('.gitignore')) {
-  const gitignoreContent = fs.readFileSync('.gitignore', 'utf8');
-  
-  const requiredIgnores = ['.env', 'node_modules/', '*.log'];
-  const missingIgnores = [];
-  
-  requiredIgnores.forEach(pattern => {
-    if (!gitignoreContent.includes(pattern)) {
-      missingIgnores.push(pattern);
-    }
-  });
-  
-  if (missingIgnores.length > 0) {
-    console.log(`❌ .gitignore missing patterns: ${missingIgnores.join(', ')}`);
+  const content = fs.readFileSync('.gitignore', 'utf8');
+  const missing = REQUIRED_IGNORES.filter((p) => !content.includes(p));
+  if (missing.length > 0) {
+    console.log(`   ❌ .gitignore is missing: ${missing.join(', ')}`);
     issues++;
   } else {
-    console.log('✅ .gitignore properly configured');
+    console.log('   ✅ .gitignore is properly configured\n');
   }
 } else {
-  console.log('❌ .gitignore file not found!');
+  console.log('   ❌ .gitignore not found');
   issues++;
 }
 
+// ---------------------------------------------------------------
+// 4. Required files present
+// ---------------------------------------------------------------
 console.log('\n📋 Checking required files...');
-
-const requiredFiles = [
+const REQUIRED_FILES = [
+  'app.js',
   'package.json',
-  'app.js', 
-  'dashboard.html',
-  'dashboard.js',
-  '.env.production',
+  'schema.sql',
+  'seed.js',
+  '.env.example',
   'README.md',
-  '.gitignore'
+  '.gitignore',
+  'load-test.js',
+  'checkout-stress-test.js',
+  'socket-test.html',
+  'dashboard.html',
 ];
 
-requiredFiles.forEach(file => {
+REQUIRED_FILES.forEach((file) => {
   if (fs.existsSync(file)) {
-    console.log(`✅ ${file} - Found`);
+    console.log(`   ✅ ${file}`);
   } else {
-    console.log(`❌ ${file} - Missing`);
+    console.log(`   ❌ ${file}  — MISSING`);
     issues++;
   }
 });
 
+// ---------------------------------------------------------------
+// Summary
+// ---------------------------------------------------------------
 console.log('\n📊 Summary:');
 if (issues === 0) {
-  console.log('🎉 All checks passed! Repository is safe to commit.');
-  console.log('\n💡 Remember to:');
-  console.log('   - Configure .env with your local database details');
-  console.log('   - Never commit files containing real passwords');
-  console.log('   - Use strong, unique passwords for production');
+  console.log('🎉 All checks passed. Repository is safe to commit.\n');
 } else {
-  console.log(`❌ Found ${issues} security issues that need to be resolved before committing.`);
-  console.log('\n🔧 Actions needed:');
-  console.log('   - Remove or add sensitive files to .gitignore');
-  console.log('   - Replace hardcoded secrets with environment variables');
-  console.log('   - Ensure .gitignore covers all sensitive patterns');
-  
+  console.log(`❌ ${issues} issue(s) must be resolved before committing.\n`);
   process.exit(1);
 }
 
-console.log('\n🚀 Ready for GitHub? Run these commands:');
+console.log('🚀 Ready to push? Run:');
 console.log('   git add .');
-console.log('   git commit -m "Add RMS hosting test with dashboard"');  
-console.log('   git push origin main');
+console.log('   git commit -m "your message"');
+console.log('   git push origin main\n');
