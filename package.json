@@ -1,26 +1,38 @@
 {
-  "name": "rms-hosting-test",
-  "version": "1.0.0",
-  "description": "MERN to MySQL + Socket.IO migration test for cPanel hosting",
+  "name": "rms-hosting-tester",
+  "version": "2.0.0",
+  "description": "Tests whether shared cPanel hosting can support a Node.js Restaurant Management System backend (MySQL, transactions, Socket.IO, concurrent load).",
   "main": "app.js",
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "node app.js",
-    "dev": "node app.js",
-    "load-test": "node load-test.js",
-    "seed-db": "node seed-db.js",
-    "test": "node static-check.js",
-    "security-check": "node pre-commit-check.js",
-    "prepare-deploy": "node prepare-deploy.js"
+    "start":                "node app.js",
+    "dev":                  "node app.js",
+    "seed":                 "node seed.js",
+    "seed-db":              "node seed.js",
+    "load-test":            "node load-test.js",
+    "stress-test":          "node checkout-stress-test.js",
+    "security-check":       "node pre-commit-check.js",
+    "prepare-deploy":       "node prepare-deploy.js"
   },
-  "keywords": ["nodejs", "mysql", "socket.io", "express", "cpanel", "mern", "migration"],
-  "author": "Your Name",
+  "keywords": [
+    "nodejs",
+    "mysql",
+    "socket.io",
+    "express",
+    "cpanel",
+    "hosting",
+    "rms",
+    "restaurant",
+    "transactions",
+    "load-testing"
+  ],
+  "author": "",
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/rms-hosting-test.git"
+    "url": "https://github.com/Qasim-Ali252/rms-hosting-tester.git"
   },
   "dependencies": {
     "dotenv": "^16.3.0",
