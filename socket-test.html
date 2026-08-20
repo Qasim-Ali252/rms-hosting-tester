@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Socket.IO Test – RMS Hosting Tester</title>
+  <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 20px;
+    }
+    h1 { color: #00d4ff; margin-bottom: 4px; }
+    .subtitle { color: #888; font-size: 14px; margin-bottom: 24px; }
+
+    .card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .card h3 { color: #00d4ff; margin-bottom: 12px; font-size: 15px; text-transform: uppercase; letter-spacing: 1px; }
+
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
+    input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 8px 12px;
+      background: #0f3460;
+      border: 1px solid #1a4a7a;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 14px;
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    button:hover   { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-green  { background: #00b894; color: #fff; }
+    .btn-red    { background: #e17055; color: #fff; }
+    .btn-blue   { background: #0984e3; color: #fff; }
+    .btn-purple { background: #6c5ce7; color: #fff; }
+    .btn-orange { background: #e67e22; color: #fff; }
+
+    /* Status indicators */
+    .status-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      background: #0f3460;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-green  { background: #00b894; }
+    .dot-red    { background: #e17055; }
+    .dot-yellow { background: #fdcb6e; }
+    .dot-grey   { background: #636e72; }
+
+    /* Log area */
+    #log {
+      background: #0a0a1a;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      padding: 12px;
+      height: 340px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .log-ts    { color: #636e72; }
+    .log-info  { color: #74b9ff; }
+    .log-ok    { color: #55efc4; }
+    .log-warn  { color: #fdcb6e; }
+    .log-err   { color: #ff7675; }
+    .log-event { color: #a29bfe; }
+
+    /* Metrics */
+    .metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+    .metric {
+      flex: 1;
+      min-width: 110px;
+      background: #0f3460;
+      border-radius: 6px;
+      padding: 10px;
+      text-align: center;
+    }
+    .metric-val   { font-size: 22px; font-weight: 700; color: #00d4ff; }
+    .metric-label { font-size: 11px; color: #888; margin-top: 4px; }
+
+    .divider { border: none; border-top: 1px solid #0f3460; margin: 14px 0; }
+  </style>
+</head>
+<body>
+
+  <h1>⚡ Socket.IO Test Page</h1>
+  <p class="subtitle">RMS Hosting Tester – confirms real-time WebSocket/WSS through cPanel</p>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="badge">
+      <div class="dot" id="dot-conn"></div>
+      <span id="lbl-conn">Disconnected</span>
+    </div>
+    <div class="badge">
+      Socket ID: <span id="lbl-id" style="color:#00d4ff">–</span>
+    </div>
+    <div class="badge">
+      Transport: <span id="lbl-transport" style="color:#a29bfe">–</span>
+    </div>
+    <div class="badge">
+      Reconnects: <span id="lbl-reconnects" style="color:#fdcb6e">0</span>
+    </div>
+  </div>
+
+  <!-- Server Config -->
+  <div class="card">
+    <h3>⚙ Server URL</h3>
+    <div class="row">
+      <input type="text" id="server-url" placeholder="https://yourdomain.com  or  http://localhost:3000" value="" />
+      <button class="btn-green" onclick="connect()">Connect</button>
+      <button class="btn-red"   onclick="disconnect()">Disconnect</button>
+    </div>
+    <small style="color:#888">
+      Use <code>https://</code> for cPanel production. Use <code>http://localhost:PORT</code> for local testing.
+    </small>
+  </div>
+
+  <!-- Events -->
+  <div class="card">
+    <h3>📡 Send Events</h3>
+    <div class="row">
+      <button class="btn-blue"   id="btn-ping"  onclick="sendPing()"   disabled>Send test:ping</button>
+      <button class="btn-purple" id="btn-order" onclick="sendOrderNew()" disabled>Simulate order:new</button>
+      <button class="btn-orange" id="btn-msg"   onclick="sendMessage()" disabled>Send test-message (legacy)</button>
+    </div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="card">
+    <h3>📊 Metrics</h3>
+    <div class="metrics">
+      <div class="metric"><div class="metric-val" id="m-sent">0</div><div class="metric-label">Events Sent</div></div>
+      <div class="metric"><div class="metric-val" id="m-recv">0</div><div class="metric-label">Events Received</div></div>
+      <div class="metric"><div class="metric-val" id="m-orders">0</div><div class="metric-label">order:created</div></div>
+      <div class="metric"><div class="metric-val" id="m-inv">0</div><div class="metric-label">inventory:updated</div></div>
+      <div class="metric"><div class="metric-val" id="m-latency">–</div><div class="metric-label">Last Ping (ms)</div></div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <h3>📋 Event Log</h3>
+    <button class="btn-red" onclick="clearLog()" style="margin-bottom:10px;font-size:12px;padding:5px 10px">Clear Log</button>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    // -------------------------------------------------------
+    // State
+    // -------------------------------------------------------
+    let socket = null;
+    let sent = 0, recv = 0, orders = 0, invUpdates = 0, reconnects = 0;
+    let pingTs = null;
+
+    // -------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------
+    function log(cls, msg) {
+      const el  = document.getElementById('log');
+      const ts  = new Date().toLocaleTimeString();
+      el.innerHTML += `<div><span class="log-ts">[${ts}]</span> <span class="${cls}">${msg}</span></div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function setMetric(id, val) { document.getElementById(id).textContent = val; }
+
+    function setConnected(connected) {
+      const dot  = document.getElementById('dot-conn');
+      const lbl  = document.getElementById('lbl-conn');
+      const btns = ['btn-ping', 'btn-order', 'btn-msg'];
+
+      if (connected) {
+        dot.className = 'dot dot-green';
+        lbl.textContent = 'Connected';
+      } else {
+        dot.className = 'dot dot-red';
+        lbl.textContent = 'Disconnected';
+        document.getElementById('lbl-id').textContent = '–';
+        document.getElementById('lbl-transport').textContent = '–';
+      }
+      btns.forEach(id => { document.getElementById(id).disabled = !connected; });
+    }
+
+    function getServerUrl() {
+      const raw = document.getElementById('server-url').value.trim().replace(/\/$/, '');
+      return raw || window.location.origin;
+    }
+
+    // -------------------------------------------------------
+    // Connect
+    // -------------------------------------------------------
+    function connect() {
+      if (socket && socket.connected) {
+        log('log-warn', 'Already connected. Disconnect first.');
+        return;
+      }
+
+      const url = getServerUrl();
+      log('log-info', `Connecting to ${url} …`);
+
+      socket = io(url, {
+        transports:         ['websocket', 'polling'],
+        reconnectionDelay:  1000,
+        reconnectionAttempts: 10,
+      });
+
+      // ---- Connection events ----
+      socket.on('connect', () => {
+        setConnected(true);
+        document.getElementById('lbl-id').textContent        = socket.id;
+        document.getElementById('lbl-transport').textContent = socket.io.engine.transport.name;
+        log('log-ok', `✅ Connected  id=${socket.id}  transport=${socket.io.engine.transport.name}`);
+      });
+
+      socket.on('disconnect', (reason) => {
+        setConnected(false);
+        log('log-warn', `⚠ Disconnected: ${reason}`);
+      });
+
+      socket.on('connect_error', (err) => {
+        setConnected(false);
+        document.getElementById('dot-conn').className = 'dot dot-yellow';
+        log('log-err', `❌ Connection error: ${err.message}`);
+      });
+
+      socket.io.on('reconnect_attempt', (attempt) => {
+        reconnects++;
+        setMetric('lbl-reconnects', reconnects);
+        document.getElementById('dot-conn').className = 'dot dot-yellow';
+        document.getElementById('lbl-conn').textContent = `Reconnecting (${attempt})…`;
+        log('log-warn', `🔄 Reconnect attempt ${attempt}`);
+      });
+
+      socket.io.on('reconnect', () => {
+        setConnected(true);
+        log('log-ok', `✅ Reconnected after ${reconnects} attempt(s)`);
+      });
+
+      // ---- App events ----
+      socket.on('server-message', (data) => {
+        recv++;
+        setMetric('m-recv', recv);
+        log('log-ok', `server-message: ${JSON.stringify(data)}`);
+      });
+
+      socket.on('test:pong', (data) => {
+        recv++;
+        setMetric('m-recv', recv);
+        const latency = pingTs ? (Date.now() - pingTs) : '–';
+        setMetric('m-latency', latency + 'ms');
+        log('log-event', `test:pong  latency=${latency}ms  data=${JSON.stringify(data)}`);
+      });
+
+      socket.on('test-response', (data) => {
+        recv++;
+        setMetric('m-recv', recv);
+        log('log-event', `test-response: ${JSON.stringify(data)}`);
+      });
+
+      socket.on('order:created', (data) => {
+        recv++; orders++;
+        setMetric('m-recv', recv);
+        setMetric('m-orders', orders);
+        log('log-ok', `🧾 order:created  orderId=${data.orderId}  total=${data.total}`);
+      });
+
+      socket.on('inventory:updated', (data) => {
+        recv++; invUpdates++;
+        setMetric('m-recv', recv);
+        setMetric('m-inv', invUpdates);
+        log('log-event', `📦 inventory:updated  items=${JSON.stringify(data.updatedItems)}`);
+      });
+
+      socket.on('dashboard-pong', (data) => {
+        recv++;
+        setMetric('m-recv', recv);
+        log('log-event', `dashboard-pong: ${JSON.stringify(data)}`);
+      });
+    }
+
+    // -------------------------------------------------------
+    // Disconnect
+    // -------------------------------------------------------
+    function disconnect() {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+        log('log-info', 'Disconnected manually.');
+      }
+    }
+
+    // -------------------------------------------------------
+    // Emit events
+    // -------------------------------------------------------
+    function sendPing() {
+      if (!socket || !socket.connected) { log('log-err', 'Not connected.'); return; }
+      pingTs = Date.now();
+      socket.emit('test:ping', { from: 'browser', at: new Date().toISOString() });
+      sent++;
+      setMetric('m-sent', sent);
+      log('log-info', 'Sent test:ping');
+    }
+
+    function sendOrderNew() {
+      if (!socket || !socket.connected) { log('log-err', 'Not connected.'); return; }
+      const payload = { tableNo: Math.ceil(Math.random() * 20), items: ['Burger', 'Fries'], manualTest: true };
+      socket.emit('order:new', payload);
+      sent++;
+      setMetric('m-sent', sent);
+      log('log-info', `Sent order:new  ${JSON.stringify(payload)}`);
+    }
+
+    function sendMessage() {
+      if (!socket || !socket.connected) { log('log-err', 'Not connected.'); return; }
+      const payload = { text: 'Hello from socket-test page', ts: new Date().toISOString() };
+      socket.emit('test-message', payload);
+      sent++;
+      setMetric('m-sent', sent);
+      log('log-info', `Sent test-message  ${JSON.stringify(payload)}`);
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // -------------------------------------------------------
+    // Auto-populate server URL from current origin on load
+    // -------------------------------------------------------
+    window.addEventListener('load', () => {
+      const input = document.getElementById('server-url');
+      if (!input.value) {
+        input.value = window.location.origin;
+      }
+      setConnected(false);
+      log('log-info', 'Page loaded. Enter the server URL and click Connect.');
+      log('log-info', `Current origin: ${window.location.origin}`);
+    });
+  </script>
+</body>
+</html>
