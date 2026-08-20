@@ -1,0 +1,32 @@
+{
+  "name": "rms-hosting-test",
+  "version": "1.0.0",
+  "description": "MERN to MySQL + Socket.IO migration test for cPanel hosting",
+  "main": "app.js",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node app.js",
+    "load-test": "node load-test.js",
+    "seed-db": "node seed-db.js",
+    "test": "node static-check.js",
+    "security-check": "node pre-commit-check.js",
+    "prepare-deploy": "node prepare-deploy.js"
+  },
+  "keywords": ["nodejs", "mysql", "socket.io", "express", "cpanel", "mern", "migration"],
+  "author": "Your Name",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/rms-hosting-test.git"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.0",
+    "express": "^4.18.2",
+    "mysql2": "^3.3.0",
+    "socket.io": "^4.7.0",
+    "socket.io-client": "^4.8.3"
+  }
+}

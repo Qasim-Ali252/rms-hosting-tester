@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Socket.IO Test Client</title>
+    <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h1>Socket.IO Test Client</h1>
+    <button id="connect">Connect</button>
+    <button id="send">Send Test Message</button>
+    <pre id="log"></pre>
+
+    <script>
+      const log = (m) => { document.getElementById('log').textContent += m + '\n'; };
+      let socket;
+      const DEFAULT_ORIGIN = 'http://localhost:3000';
+      document.getElementById('connect').addEventListener('click', () => {
+        const origin = prompt('Enter server URL (e.g. https://api-test.yourdomain.com)', DEFAULT_ORIGIN);
+        if (!origin) return;
+        socket = io(origin, { transports: ['websocket', 'polling'] });
+        socket.on('connect', () => log('Connected: ' + socket.id));
+        socket.on('server-message', (d) => log('server-message: ' + JSON.stringify(d)));
+        socket.on('test-response', (d) => log('test-response: ' + JSON.stringify(d)));
+        socket.on('disconnect', () => log('Disconnected'));
+      });
+
+      document.getElementById('send').addEventListener('click', () => {
+        if (!socket || !socket.connected) return alert('Not connected');
+        const payload = { now: new Date().toISOString() };
+        socket.emit('test-message', payload);
+        log('Sent: ' + JSON.stringify(payload));
+      });
+    </script>
+  </body>
+</html>
