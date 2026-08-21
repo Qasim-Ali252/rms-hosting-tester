@@ -1,8 +1,8 @@
 class TestDashboard {
     constructor() {
-        // Auto-detect: when the dashboard is served by the app itself, use the
-        // same origin so it works regardless of which port the app is on.
-        this.serverUrl = window.location.origin;
+        // Auto-detect: resolved properly in initializeDashboard() once the
+        // current page URL is known (handles cPanel sub-path deployments).
+        this.serverUrl = '';
         this.socket = null;
         this.loadTestActive = false;
         this.monitoringActive = false;
@@ -22,6 +22,15 @@ class TestDashboard {
     initializeDashboard() {
         this.log('info', '🚀 Dashboard initialized successfully');
         
+        // Auto-detect the server URL based on where this page is being served from.
+        // When cPanel hosts the app under a sub-path (e.g. /test/dashboard.html),
+        // window.location.origin alone points to the root domain which returns HTML,
+        // not our API. We strip the filename and trailing slash from the current
+        // URL path so that API calls go to the same base path as this page.
+        const pagePath = window.location.pathname; // e.g. /test/dashboard.html
+        const basePath = pagePath.substring(0, pagePath.lastIndexOf('/')); // e.g. /test
+        this.serverUrl = window.location.origin + basePath; // e.g. https://ficertech.com/test
+
         // Populate the URL input with the auto-detected origin
         const urlInput = document.getElementById('server-url');
         if (!urlInput.value) {
