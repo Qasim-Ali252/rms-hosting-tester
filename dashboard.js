@@ -116,7 +116,7 @@ class TestDashboard {
         const testName = endpoint.replace('/', '').replace('-test', '');
         this.log('info', `🧪 Running ${testName} test...`);
         
-        const result = await this.makeRequest(endpoint === '/health' ? '/' : endpoint);
+        const result = await this.makeRequest(endpoint);
         
         if (result.success) {
             this.log('success', `✅ ${testName} test passed (${result.duration}ms)`);
@@ -252,9 +252,13 @@ class TestDashboard {
 
         this.log('info', '🔌 Connecting to Socket.IO...');
         
+        // cPanel/Passenger runs Node.js behind Apache which does NOT support
+        // WebSocket upgrades on shared hosting. Use polling-only transport to
+        // avoid the "websocket error" and fall back gracefully.
         this.socket = io(this.serverUrl, {
-            transports: ['websocket', 'polling'],
-            reconnectionAttempts: 3
+            transports: ['polling'],
+            reconnectionAttempts: 3,
+            path: '/socket.io'
         });
 
         this.socket.on('connect', () => {
@@ -323,6 +327,7 @@ class TestDashboard {
         }
 
         this.monitoringActive = true;
+        this.monitoringStartTime = Date.now();
         this.log('info', '📈 Starting performance monitoring...');
         
         document.getElementById('monitor-btn').disabled = true;
@@ -336,19 +341,23 @@ class TestDashboard {
     }
 
     async performMonitoringCheck() {
-        const result = await this.makeRequest('/');
+        // Use /health for monitoring checks — it always returns JSON and
+        // avoids Apache's HTML error pages on cPanel sub-path deployments.
+        const result = await this.makeRequest('/health');
         
         if (result.success) {
             this.updateMetric('response-time', `${result.duration}ms`);
             this.updateMetric('success-rate', '100%');
             
-            // Calculate uptime (simplified)
-            const uptime = Math.floor((Date.now() - (this.loadTestStats.startTime || Date.now())) / 1000);
-            this.updateMetric('uptime', `${uptime}s`);
+            // Show server uptime from the response if available, otherwise elapsed
+            const uptime = result.data?.uptime != null
+                ? `${Math.floor(result.data.uptime)}s`
+                : `${Math.floor((Date.now() - (this.monitoringStartTime || Date.now())) / 1000)}s`;
+            this.updateMetric('uptime', uptime);
         } else {
             this.updateMetric('response-time', 'Failed');
             this.updateMetric('success-rate', '0%');
-            this.log('error', `❌ Monitoring check failed: ${result.error}`);
+            this.log('error', `❌ Monitoring check failed: ${result.error || `HTTP ${result.status}`}`);
         }
     }
 

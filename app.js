@@ -27,9 +27,13 @@ const path       = require('path');
 const app    = express();
 const server = http.createServer(app);
 
-// Socket.IO - allow all origins for cross-origin browser tests
+// Socket.IO - allow all origins for cross-origin browser tests.
+// On cPanel/Passenger (Apache reverse proxy), WebSocket upgrades are blocked,
+// so we accept polling transport which works reliably on shared hosting.
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors:       { origin: '*', methods: ['GET', 'POST'] },
+  transports: ['polling', 'websocket'],   // polling first so it works on cPanel
+  allowEIO3:  true,                       // accept older Socket.IO clients
 });
 
 app.use(express.json());
