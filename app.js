@@ -407,6 +407,7 @@ app.get('/report-test', async (req, res) => {
 /**
  * GET /pos-test
  * Quick database round-trip latency check used by the load tester.
+ * Returns a clear error when the database is unavailable.
  */
 app.get('/pos-test', async (req, res) => {
   const start = Date.now();
@@ -419,7 +420,13 @@ app.get('/pos-test', async (req, res) => {
       requestId:   Math.random().toString(36).substr(2, 9),
     });
   } catch (err) {
-    errorResponse(res, 500, 'POS test failed', err);
+    const durationMs = Date.now() - start;
+    console.error('POS test - DB unavailable:', err.message);
+    res.status(503).json({
+      success:    false,
+      message:    'Database unavailable',
+      durationMs,
+    });
   }
 });
 

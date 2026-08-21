@@ -1,6 +1,8 @@
 class TestDashboard {
     constructor() {
-        this.serverUrl = 'http://localhost:3001';
+        // Auto-detect: when the dashboard is served by the app itself, use the
+        // same origin so it works regardless of which port the app is on.
+        this.serverUrl = window.location.origin;
         this.socket = null;
         this.loadTestActive = false;
         this.monitoringActive = false;
@@ -20,12 +22,15 @@ class TestDashboard {
     initializeDashboard() {
         this.log('info', '🚀 Dashboard initialized successfully');
         
-        // Set initial server URL
+        // Populate the URL input with the auto-detected origin
         const urlInput = document.getElementById('server-url');
-        if (urlInput.value) {
-            this.serverUrl = urlInput.value;
-            document.getElementById('current-server').textContent = this.serverUrl;
+        if (!urlInput.value) {
+            urlInput.value = this.serverUrl;
+        } else {
+            // User has a value pre-filled – respect it
+            this.serverUrl = urlInput.value.replace(/\/$/, '');
         }
+        document.getElementById('current-server').textContent = this.serverUrl;
     }
 
     log(type, message) {
@@ -127,7 +132,8 @@ class TestDashboard {
             completed: 0,
             errors: 0,
             totalTime: 0,
-            startTime: Date.now()
+            startTime: Date.now(),
+            firstError: null
         };
 
         this.log('info', `🚀 Starting load test: ${totalRequests} requests, ${concurrency} concurrent`);
@@ -173,6 +179,11 @@ class TestDashboard {
             this.loadTestStats.totalTime += result.duration;
         } else {
             this.loadTestStats.errors++;
+            // Surface a useful first-error message so users know why requests fail
+            if (!this.loadTestStats.firstError) {
+                const reason = result.data?.message || result.error || `HTTP ${result.status}`;
+                this.loadTestStats.firstError = reason;
+            }
         }
         
         this.updateLoadTestUI();
@@ -185,8 +196,9 @@ class TestDashboard {
         this.updateMetric('completed-requests', completed);
         this.updateMetric('error-count', errors);
         
-        const avgLatency = completed > 0 ? Math.round(totalTime / (completed - errors)) : 0;
-        this.updateMetric('avg-latency', avgLatency + 'ms');
+        const successfulRequests = completed - errors;
+        const avgLatency = successfulRequests > 0 ? Math.round(totalTime / successfulRequests) : 0;
+        this.updateMetric('avg-latency', successfulRequests > 0 ? avgLatency + 'ms' : 'N/A');
         
         const elapsedTime = (Date.now() - startTime) / 1000;
         const rps = Math.round(completed / elapsedTime);
@@ -208,11 +220,18 @@ class TestDashboard {
         this.loadTestActive = false;
         document.getElementById('load-test-btn').disabled = false;
         
-        const { completed, errors, totalTime, startTime } = this.loadTestStats;
+        const { completed, errors, totalTime, startTime, firstError } = this.loadTestStats;
         const elapsedTime = (Date.now() - startTime) / 1000;
+        const successfulRequests = completed - errors;
+        const avgLatency = successfulRequests > 0 ? Math.round(totalTime / successfulRequests) : 0;
+        const avgDisplay = successfulRequests > 0 ? `${avgLatency}ms` : 'N/A';
+        const successRate = completed > 0 ? Math.round((successfulRequests / completed) * 100) : 0;
         
         this.log('success', `✅ Load test completed: ${completed} requests in ${elapsedTime.toFixed(2)}s`);
-        this.log('info', `📊 Results: ${errors} errors, ${Math.round(totalTime / (completed - errors))}ms avg latency`);
+        this.log('info', `📊 Results: ${successfulRequests} succeeded, ${errors} errors (${successRate}% success rate), ${avgDisplay} avg latency`);
+        if (errors > 0 && firstError) {
+            this.log('error', `⚠️ Failure reason: ${firstError}`);
+        }
     }
 
     // Socket.IO Methods

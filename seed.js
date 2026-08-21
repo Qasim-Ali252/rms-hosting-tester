@@ -102,24 +102,36 @@ async function seed() {
     // Create tables if they don't exist
     // (mirrors schema.sql so seed.js can be run standalone)
     // ----------------------------------------------------------
+    // Disable FK checks during setup to avoid ordering issues
+    await conn.query('SET FOREIGN_KEY_CHECKS = 0');
+
+    // Drop tables that may exist with incompatible schema from older versions
+    // (old seed-db.js used signed INT instead of INT UNSIGNED — causes FK errno 150)
+    await conn.query('DROP TABLE IF EXISTS stock_movements');
+    await conn.query('DROP TABLE IF EXISTS order_items');
+    await conn.query('DROP TABLE IF EXISTS orders');
+    await conn.query('DROP TABLE IF EXISTS items');
+
     await conn.query(`
       CREATE TABLE IF NOT EXISTS items (
-        id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        name       VARCHAR(255)  NOT NULL,
-        category   VARCHAR(100)  NOT NULL DEFAULT 'General',
-        price      DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        stock      INT           NOT NULL DEFAULT 0,
-        created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        id         INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+        name       VARCHAR(255)    NOT NULL,
+        category   VARCHAR(100)    NOT NULL DEFAULT 'General',
+        price      DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+        stock      INT             NOT NULL DEFAULT 0,
+        created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
         INDEX idx_items_category (category)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS orders (
-        id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        total      DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        id         INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+        total      DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
         status     ENUM('completed','failed','pending') NOT NULL DEFAULT 'completed',
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
         INDEX idx_orders_created_at (created_at),
         INDEX idx_orders_status     (status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -127,34 +139,39 @@ async function seed() {
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS order_items (
-        id       INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        order_id INT UNSIGNED NOT NULL,
-        item_id  INT UNSIGNED NOT NULL,
-        quantity INT          NOT NULL DEFAULT 1,
-        price    DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-        CONSTRAINT fk_oi_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-        CONSTRAINT fk_oi_item  FOREIGN KEY (item_id)  REFERENCES items(id)  ON DELETE RESTRICT,
+        id       INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+        order_id INT UNSIGNED    NOT NULL,
+        item_id  INT UNSIGNED    NOT NULL,
+        quantity INT             NOT NULL DEFAULT 1,
+        price    DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+        subtotal DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+        PRIMARY KEY (id),
         INDEX idx_oi_order_id (order_id),
-        INDEX idx_oi_item_id  (item_id)
+        INDEX idx_oi_item_id  (item_id),
+        CONSTRAINT fk_oi_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+        CONSTRAINT fk_oi_item  FOREIGN KEY (item_id)  REFERENCES items(id)  ON DELETE RESTRICT
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS stock_movements (
-        id                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        item_id            INT UNSIGNED NOT NULL,
-        quantity           INT          NOT NULL,
+        id                 INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+        item_id            INT UNSIGNED    NOT NULL,
+        quantity           INT             NOT NULL,
         movement_type      ENUM('sale','restock','adjustment') NOT NULL,
-        reference_order_id INT UNSIGNED NULL DEFAULT NULL,
-        created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_sm_item  FOREIGN KEY (item_id)             REFERENCES items(id)  ON DELETE RESTRICT,
-        CONSTRAINT fk_sm_order FOREIGN KEY (reference_order_id)  REFERENCES orders(id) ON DELETE SET NULL,
+        reference_order_id INT UNSIGNED    NULL DEFAULT NULL,
+        created_at         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
         INDEX idx_sm_item_id    (item_id),
         INDEX idx_sm_ref_order  (reference_order_id),
-        INDEX idx_sm_created_at (created_at)
+        INDEX idx_sm_created_at (created_at),
+        CONSTRAINT fk_sm_item  FOREIGN KEY (item_id)            REFERENCES items(id)  ON DELETE RESTRICT,
+        CONSTRAINT fk_sm_order FOREIGN KEY (reference_order_id) REFERENCES orders(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    // Re-enable FK checks now that all tables exist
+    await conn.query('SET FOREIGN_KEY_CHECKS = 1');
 
     console.log('✅ Tables verified / created.\n');
 
@@ -165,7 +182,7 @@ async function seed() {
 
     if (Number(itemCount) > 0) {
       console.log(`ℹ️  Items table already has ${itemCount} rows. Skipping item seed.`);
-      console.log('   To reseed, truncate the items table first.\n');
+      console.log('   To reseed items, run: node seed.js --fresh\n');
     } else {
       const rows = MENU_ITEMS.map(i => [i.name, i.category, i.price, i.stock]);
       await conn.query(
